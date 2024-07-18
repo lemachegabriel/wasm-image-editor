@@ -41,6 +41,22 @@ extern fn acumular(ponteiro: *mut u8, comprimento: usize) -> i32 {
     soma as i32
 }
 
+#[no_mangle]
+extern fn filtro_preto_e_branco(ponteiro: *mut u8, comprimento: usize) {
+    let pixels = unsafe { from_raw_parts_mut(ponteiro as *mut u8, comprimento) };
+    let mut i = 0;
+    loop {
+        if i >= comprimento - 1 {
+            break;
+        }
+        let filtro = (pixels[i] / 3) + (pixels[i + 1] / 3) + (pixels[i + 2] / 3);
+        pixels[i] = filtro;
+        pixels[i + 1] = filtro;
+        pixels[i + 2] = filtro;
+        i += 4;
+    }
+}
+
 
 #[no_mangle]
 pub fn subtracao(numero_a: u8, numero_b: u8) -> u8 {

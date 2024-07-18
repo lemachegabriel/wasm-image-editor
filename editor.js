@@ -1,6 +1,7 @@
 const input = document.querySelector('input');
 const botaoResetarFiltro = document.querySelector('#remover');
 const botaoPBFiltroJs = document.querySelector('#preto-e-branco-js');
+const botaoPBFiltroWasm = document.querySelector('#preto-e-branco-wasm');
 
 let imagemOriginal = document.getElementById('imagem').src;
 
@@ -11,7 +12,33 @@ WebAssembly.instantiateStreaming(fetch(file))
   .then((wasm) => {
     const { instance } = wasm
 
-    const { subtracao, criar_memoria_inicial, memory, malloc, acumular } = instance.exports
+    const { subtracao, criar_memoria_inicial, memory, malloc, acumular, filtro_preto_e_branco } = instance.exports
+
+    botaoPBFiltroWasm.addEventListener('click', (event) => {
+      const imagem = document.getElementById('imagem')
+      const {canvas, contexto} = converteImagemParaCanvas(imagem)
+      const dadosDaImagem = contexto.getImageData(0, 0, canvas.width, canvas.height)
+      const buffer = dadosDaImagem.data.buffer
+      const u8Array = new Uint8Array(buffer)
+      const ponteiro = malloc(u8Array.length)
+      let wasmArray = new Uint8ClampedArray(instance.exports.memory.buffer, ponteiro, u8Array.length)
+
+      wasmArray.set(u8Array)
+      const inicio = performance.now()
+      filtro_preto_e_branco(ponteiro, u8Array.length)
+      const final = performance.now()
+      tempoDaOperacao(inicio, final, 'WebAssembly Preto e Branco')
+
+      const width = imagem.naturalWidth || imagem.width
+      const height = imagem.naturalHeight || imagem.height
+
+      const novoDadosDaImagem = contexto.createImageData(width, height)
+
+      novoDadosDaImagem.data.set(wasmArray)
+      contexto.putImageData(novoDadosDaImagem, 0, 0)
+      imagem.src = canvas.toDataURL('image/jpeg')
+
+    })
 
     criar_memoria_inicial()
 
@@ -77,3 +104,56 @@ function converteImagemParaCanvas(imagem) {
   return { canvas, contexto };
 };
 
+
+function filtroPretoBrancoJS(canvas, contexto) {
+  // Pega os dados da imagem
+  const dadosDaImagem = contexto.getImageData(0, 0, canvas.width, canvas.height);
+
+  // Pega os pixels da imagem
+  const pixels = dadosDaImagem.data;
+
+  // Salva o tempo do inicio
+  const inicio = performance.now();
+
+  // Performa a mudança em cada pixel da imagem de 
+  // acordo com a formula vista acima
+  for (var i = 0, n = pixels.length; i < n; i += 4) {
+    const filtro = pixels[i] / 3 + pixels[i+1] / 3 + pixels[i+2] / 3;
+    pixels[i] = filtro;
+    pixels[i+1] = filtro;
+    pixels[i+2] = filtro;
+  }
+
+  // Salva o tempo do fim
+  const fim = performance.now();
+
+  // Reporta o tempo que levou
+  tempoDaOperacao(inicio, fim, 'JavaScript Preto e Branco');
+
+  // Atualiza o canvas com os novos dados
+  contexto.putImageData(dadosDaImagem, 0, 0);
+
+  // Retorna um base64 do canvas
+  return canvas.toDataURL('image/jpeg');
+};
+
+botaoPBFiltroJs.addEventListener('click', (event) => {
+  // Seleciona a imagem
+  const imagem = document.getElementById('imagem');
+  
+  // Converte a imagem para canvas
+  const { canvas, contexto } = converteImagemParaCanvas(imagem);
+
+  // Recebe o base64
+  const base64 = filtroPretoBrancoJS(canvas, contexto);
+
+  // Coloca o novo base64 na imagem
+  imagem.src = base64;  
+});
+
+function tempoDaOperacao(inicio, fim, nomeDaOperacao) {
+  // Seleciona o elemento #performance
+  const performance = document.querySelector('#performance');
+  // Muda o texto de #performance para o tempo da execução
+  performance.textContent = `${nomeDaOperacao}: ${fim - inicio} ms.`;
+};
